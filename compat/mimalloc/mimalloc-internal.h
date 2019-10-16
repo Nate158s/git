@@ -158,8 +158,10 @@ static inline bool mi_mul_overflow(size_t count, size_t size, size_t* total) {
 #if __has_builtin(__builtin_umul_overflow) || __GNUC__ >= 5
 #if (MI_INTPTR_SIZE == 4)
   return __builtin_umul_overflow(count, size, total);
-#else
+#elif ULONG_MAX != 0xffffffffl
   return __builtin_umull_overflow(count, size, total);
+#else
+  return __builtin_umulll_overflow(count, size, total);
 #endif
 #else /* __builtin_umul_overflow is unavailable */
   *total = count * size;
