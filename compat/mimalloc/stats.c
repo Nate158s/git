@@ -381,6 +381,7 @@ double _mi_clock_end(double start) {
 #include <windows.h>
 #include <psapi.h>
 #pragma comment(lib,"psapi.lib")
+#include "compat/win32/lazyload.h"
 
 static double filetime_secs(const FILETIME* ftime) {
   ULARGE_INTEGER i;
@@ -399,11 +400,17 @@ static void mi_process_info(double* utime, double* stime, size_t* peak_rss, size
   *stime = filetime_secs(&st);
 
   PROCESS_MEMORY_COUNTERS info;
-  GetProcessMemoryInfo(GetCurrentProcess(), &info, sizeof(info));
-  *peak_rss = (size_t)info.PeakWorkingSetSize;
-  *page_faults = (size_t)info.PageFaultCount;
-  *peak_commit = (size_t)info.PeakPagefileUsage;
-  *page_reclaim = 0;
+  DECLARE_PROC_ADDR(psapi, BOOL, GetProcessMemoryInfo, HANDLE, PPROCESS_MEMORY_COUNTERS, DWORD);
+  if (INIT_PROC_ADDR(GetProcessMemoryInfo)) {
+    GetProcessMemoryInfo(GetCurrentProcess(), &info, sizeof(info));
+    *peak_rss = (size_t)info.PeakWorkingSetSize;
+    *page_faults = (size_t)info.PageFaultCount;
+    *peak_commit = (size_t)info.PeakPagefileUsage;
+    *page_reclaim = 0;
+  } else {
+    *peak_rss = *page_faults = *peak_commit = 0;
+    *page_reclaim = 0;
+  }
 }
 
 #elif defined(__unix__) || defined(__unix) || defined(unix) || (defined(__APPLE__) && defined(__MACH__))
