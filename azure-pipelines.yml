@@ -53,7 +53,6 @@ jobs:
       & git-sdk-64-minimal\usr\bin\bash.exe -lxec @"
         git init --bare bare-repo.git &&
         git -C bare-repo.git fetch https://github.com/torvalds/linux/ v2.6.21 &&
-        git -C bare-repo.git gc --aggressive &&
 
         curl -Lo MinGit.zip https://github.com/git-for-windows/git/releases/download/v2.23.0.windows.1/MinGit-2.23.0-64-bit.zip &&
         mkdir -p MinGit &&
