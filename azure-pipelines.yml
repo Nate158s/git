@@ -421,28 +421,28 @@ jobs:
       targetPath: '$(Build.SourcesDirectory)\MinGit-msvc-mimalloc'
   - powershell: |
       Write-Host "GCC with system allocator"
-      & MinGit-gcc-system-allocator\cmd\git.exe -C bare-repo-gcc-system-allocator.git repack -d -l -A --unpack-unreachable=2.weeks.ago
+      & MinGit-gcc-system-allocator\cmd\git.exe -C bare-repo-gcc-system-allocator.git repack -d -l -A
 
       Write-Host "GCC with nedmalloc"
-      & MinGit-gcc-nedmalloc\cmd\git.exe -C bare-repo-gcc-nedmalloc.git repack -d -l -A --unpack-unreachable=2.weeks.ago
+      & MinGit-gcc-nedmalloc\cmd\git.exe -C bare-repo-gcc-nedmalloc.git repack -d -l -A
 
       Write-Host "GCC with mimalloc"
-      & MinGit-gcc-mimalloc\cmd\git.exe -C bare-repo-gcc-mimalloc.git repack -d -l -A --unpack-unreachable=2.weeks.ago
+      & MinGit-gcc-mimalloc\cmd\git.exe -C bare-repo-gcc-mimalloc.git repack -d -l -A
 
       Write-Host "GCC with mimalloc w/ eager region commit"
-      & MinGit-gcc-mimalloc\cmd\git.exe --mimalloc-eager-region-commit -C bare-repo-gcc-mimalloc-eager.git repack -d -l -A --unpack-unreachable=2.weeks.ago
+      & MinGit-gcc-mimalloc\cmd\git.exe --mimalloc-eager-region-commit -C bare-repo-gcc-mimalloc-eager.git repack -d -l -A
 
       Write-Host "MSVC with system allocator"
-      & MinGit-msvc-system-allocator\cmd\git.exe -C bare-repo-msvc-system-allocator.git repack -d -l -A --unpack-unreachable=2.weeks.ago
+      & MinGit-msvc-system-allocator\cmd\git.exe -C bare-repo-msvc-system-allocator.git repack -d -l -A
 
       Write-Host "MSVC with nedmalloc"
-      & MinGit-msvc-nedmalloc\cmd\git.exe -C bare-repo-msvc-nedmalloc.git repack -d -l -A --unpack-unreachable=2.weeks.ago
+      & MinGit-msvc-nedmalloc\cmd\git.exe -C bare-repo-msvc-nedmalloc.git repack -d -l -A
 
       Write-Host "MSVC with mimalloc"
-      & MinGit-msvc-mimalloc\cmd\git.exe -C bare-repo-msvc-mimalloc.git repack -d -l -A --unpack-unreachable=2.weeks.ago
+      & MinGit-msvc-mimalloc\cmd\git.exe -C bare-repo-msvc-mimalloc.git repack -d -l -A
 
       Write-Host "MSVC with mimalloc w/ eager region commit"
-      & MinGit-msvc-mimalloc\cmd\git.exe --mimalloc-eager-region-commit -C bare-repo-msvc-mimalloc-eager.git repack -d -l -A --unpack-unreachable=2.weeks.ago
+      & MinGit-msvc-mimalloc\cmd\git.exe --mimalloc-eager-region-commit -C bare-repo-msvc-mimalloc-eager.git repack -d -l -A
     displayName: 'Test matrix'
     env:
       HOME: $(Build.SourcesDirectory)
