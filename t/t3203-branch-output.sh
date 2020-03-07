@@ -3,13 +3,11 @@
 test_description='git branch display tests'
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-terminal.sh
+. "$TEST_DIRECTORY"/lib-crlf-messages.sh
 
 test_expect_success 'make commits' '
-	echo content >file &&
-	git add file &&
-	git commit -m one &&
-	echo content >>file &&
-	git commit -a -m two
+	test_commit one &&
+	test_commit two
 '
 
 test_expect_success 'make branches' '
@@ -95,6 +93,29 @@ test_expect_success 'git branch --ignore-case --list -v pattern shows branch sum
 	awk "{print \$NF}" <tmp >actual &&
 	test_cmp expect actual
 '
+test_create_crlf_refs
+
+test_expect_success 'git branch -v works with CRLF input' '
+	cat >expect <<-EOF &&
+	  two
+	  one
+	  Subject first line
+	  Subject first line
+	  Subject first line Subject second line
+	  Subject first line Subject second line
+	  Subject first line Subject second line
+	  Subject first line Subject second line
+	EOF
+	git branch -v >tmp &&
+	# Remove first two columns, and the line for the currently checked out branch
+	current=$(git branch --show-current) &&
+	grep -v $current <tmp | awk "{\$1=\$2=\"\"}1"  >actual &&
+	test_cmp expect actual
+'
+
+test_crlf_subject_body_and_contents branch --list crlf*
+
+test_cleanup_crlf_refs
 
 test_expect_success 'git branch -v pattern does not show branch summaries' '
 	test_must_fail git branch -v branch*
