@@ -3,6 +3,7 @@
 test_description='git show'
 
 . ./test-lib.sh
+. "$TEST_DIRECTORY/lib-crlf-messages.sh"
 
 test_expect_success setup '
 	echo hello world >foo &&
@@ -127,5 +128,9 @@ test_expect_success '--quiet suppresses diff' '
 test_expect_success 'show --graph is forbidden' '
   test_must_fail git show --graph HEAD
 '
+
+test_create_crlf_refs
+
+test_crlf_subject_body_and_contents show $LIB_CRLF_BRANCHES
 
 test_done
