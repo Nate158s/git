@@ -43,17 +43,18 @@ jobs:
           script: |
             // Figure out workflow ID, commit and tree
             const { data: run } = await github.actions.getWorkflowRun({
-              owner: context.repo.owner,
+              owner: 'phil-blain', // context.repo.owner,
               repo: context.repo.repo,
-              run_id: context.runId,
+              run_id: 300718324, // context.runId,
             });
             const workflow_id = run.workflow_id;
             const head_sha = run.head_sha;
+            if (!run.head_commit) { console.log(`run: ${JSON.stringify(run, null, 4)}`); }
             const tree_id = run.head_commit.tree_id;
 
             // See whether there is a successful run for that commit or tree
             const { data: runs } = await github.actions.listWorkflowRuns({
-              owner: context.repo.owner,
+              owner: 'phil-blain', // context.repo.owner,
               repo: context.repo.repo,
               per_page: 500,
               status: 'success',
@@ -65,7 +66,8 @@ jobs:
                 core.setOutput('enabled', ' but skip');
                 break;
               }
-              if (tree_id === run.head_commit.tree_id) {
+              //if (!run.head_commit) { console.log(`run2: ${JSON.stringify(run, null, 4)}`); }
+              if (run.head_commit && tree_id === run.head_commit.tree_id) {
                 core.warning(`Successful run for the tree ${tree_id}: ${run.html_url}`);
                 core.setOutput('enabled', ' but skip');
                 break;
