@@ -5,14 +5,15 @@ test_description='test disabling of local paths in clone/fetch'
 . "$TEST_DIRECTORY/lib-proto-disable.sh"
 
 test_expect_success 'setup repository to clone' '
-	test_commit one
+	test_commit one &&
+	git branch -M main
 '
 
 test_proto "file://" file "file://$PWD"
 test_proto "path" file .
 
 test_expect_success 'setup repo with dash' '
-	git init --bare repo.git &&
+	git init --bare -b main repo.git &&
 	git push repo.git HEAD &&
 	mv repo.git "$PWD/-repo.git"
 '
