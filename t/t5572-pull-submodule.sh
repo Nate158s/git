@@ -157,6 +157,7 @@ test_expect_success 'pull --rebase --recurse-submodules (no submodule changes, n
 
 	test_create_repo superprojet &&
 	test_commit -C superprojet first_in_super &&
+	git -C superprojet branch -M main &&
 	git -C superprojet submodule add ../submodule &&
 	git -C superprojet commit -m "add submodule" &&
 	test_commit -C superprojet third_in_super &&
@@ -170,7 +171,7 @@ test_expect_success 'pull --rebase --recurse-submodules (no submodule changes, n
 	# create topic branch in clone, not based on any remote-tracking branch
 	git -C superclone checkout -b feat HEAD~1 &&
 	test_commit -C superclone first_on_feat &&
-	git -C superclone pull --rebase --recurse-submodules origin master
+	git -C superclone pull --rebase --recurse-submodules origin main
 '
 
 # NOTE:
