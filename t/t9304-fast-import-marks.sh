@@ -5,6 +5,7 @@ test_description='test exotic situations with marks'
 
 test_expect_success 'setup dump of basic history' '
 	test_commit one &&
+	git branch -M main &&
 	git fast-export --export-marks=marks HEAD >dump
 '
 
@@ -38,7 +39,7 @@ test_expect_success 'setup submodule mapping with large id' '
 '
 
 test_expect_success 'import with submodule mapping' '
-	git init dst &&
+	git init -b main dst &&
 	git -C dst fast-import \
 		--rewrite-submodules-from=sub:../from \
 		--rewrite-submodules-to=sub:../to \
