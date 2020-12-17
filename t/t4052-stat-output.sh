@@ -5,9 +5,6 @@
 
 test_description='test --stat output of various commands'
 
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-terminal.sh
 

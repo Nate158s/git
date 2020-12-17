@@ -25,9 +25,6 @@
 #      to refer to an existing tree).
 
 test_description='check pruning of dependent objects'
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 
 # We care about reachability, so we do not want to use

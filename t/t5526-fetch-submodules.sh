@@ -3,9 +3,6 @@
 
 test_description='Recursive "git fetch" for submodules'
 
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 
 pwd=$(pwd)

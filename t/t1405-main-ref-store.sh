@@ -2,9 +2,6 @@
 
 test_description='test main ref store api'
 
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 
 RUN="test-tool ref-store main"

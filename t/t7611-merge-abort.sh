@@ -22,9 +22,6 @@ Next, test git merge --abort with the following variables:
 - changed/unchanged worktree after merge
 - changed/unchanged index after merge
 '
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 
 test_expect_success 'setup' '

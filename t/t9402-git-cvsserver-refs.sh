@@ -5,9 +5,6 @@ test_description='git-cvsserver and git refspecs
 tests ability for git-cvsserver to switch between and compare
 tags, branches and other git refspecs'
 
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 
 #########

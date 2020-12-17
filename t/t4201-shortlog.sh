@@ -6,9 +6,6 @@
 test_description='git shortlog
 '
 
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 
 test_expect_success 'setup' '

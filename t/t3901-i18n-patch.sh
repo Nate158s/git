@@ -5,9 +5,6 @@
 
 test_description='i18n settings and format-patch | am pipe'
 
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 
 check_encoding () {

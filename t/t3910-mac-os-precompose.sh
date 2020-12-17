@@ -5,9 +5,6 @@
 
 test_description='utf-8 decomposed (nfd) converted to precomposed (nfc)'
 
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 
 if ! test_have_prereq UTF8_NFD_TO_NFC

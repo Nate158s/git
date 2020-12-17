@@ -1,9 +1,6 @@
 #!/bin/sh
 
 test_description='test local clone'
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 
 repo_is_hardlinked() {

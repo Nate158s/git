@@ -9,9 +9,6 @@ This test verifies that "git submodule foreach" correctly visits all submodules
 that are currently checked out.
 '
 
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 
 

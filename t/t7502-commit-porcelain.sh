@@ -2,9 +2,6 @@
 
 test_description='git commit porcelain-ish'
 
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 
 commit_msg_is () {

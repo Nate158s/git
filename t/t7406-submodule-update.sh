@@ -9,9 +9,6 @@ This test verifies that "git submodule update" detaches the HEAD of the
 submodule and "git submodule update --rebase/--merge" does not detach the HEAD.
 '
 
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./test-lib.sh
 
 

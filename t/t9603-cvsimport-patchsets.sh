@@ -12,9 +12,6 @@
 # bug.
 
 test_description='git cvsimport testing for correct patchset estimation'
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
-export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
-
 . ./lib-cvs.sh
 
 setup_cvs_test_repository t9603
