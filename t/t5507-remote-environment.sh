@@ -5,8 +5,9 @@ test_description='check environment showed to remote side of transports'
 
 test_expect_success 'set up "remote" push situation' '
 	test_commit one &&
+	git branch -M main &&
 	git config push.default current &&
-	git init remote
+	git init -b main remote
 '
 
 test_expect_success 'set up fake ssh' '
