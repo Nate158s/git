@@ -1712,7 +1712,7 @@ test_lazy_prereq REBASE_P '
 	test -z "$GIT_TEST_SKIP_REBASE_P"
 '
 
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=oopsie
+GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=${GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME-oopsie}
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
 # Ensure that no test accidentally triggers a Git command
