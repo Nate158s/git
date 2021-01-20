@@ -56,11 +56,11 @@ int cmd_range_diff(int argc, const char **argv, const char *prefix)
 		diffopt.use_color = 1;
 
 	if (argc == 2) {
-		if (!is_range_diff_range(argv[0]))
+		if (!starts_with(argv[0], "mbox:") && !is_range_diff_range(argv[0]))
 			die(_("not a commit range: '%s'"), argv[0]);
 		strbuf_addstr(&range1, argv[0]);
 
-		if (!is_range_diff_range(argv[1]))
+		if (!starts_with(argv[1], "mbox:") && !is_range_diff_range(argv[1]))
 			die(_("not a commit range: '%s'"), argv[1]);
 		strbuf_addstr(&range2, argv[1]);
 	} else if (argc == 3) {
