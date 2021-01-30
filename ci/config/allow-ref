@@ -1,0 +1,6 @@
+#!/bin/sh
+
+case "$1" in
+refs/heads/build-git-artifacts|refs/heads/main|refs/heads/ci-config) false ;;
+*) true ;;
+esac
