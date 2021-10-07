@@ -4,6 +4,8 @@
  * Copyright (C) Linus Torvalds, 2005
  */
 #include "cache.h"
+#include "gvfs.h"
+#include "virtualfilesystem.h"
 #include "config.h"
 #include "diff.h"
 #include "diffcore.h"
@@ -111,7 +113,7 @@ static const char *alternate_index_output;
 static void set_index_entry(struct index_state *istate, int nr, struct cache_entry *ce)
 {
 	if (S_ISSPARSEDIR(ce->ce_mode))
-		istate->sparse_index = 1;
+		istate->sparse_index = COLLAPSED;
 
 	istate->cache[nr] = ce;
 	add_name_hash(istate, ce);
@@ -465,6 +467,17 @@ int ie_modified(struct index_state *istate,
 	 * then we know it is.
 	 */
 	if ((changed & DATA_CHANGED) &&
+#ifdef GIT_WINDOWS_NATIVE
+	    /*
+	     * Work around Git for Windows v2.27.0 fixing a bug where symlinks'
+	     * target path lengths were not read at all, and instead recorded
+	     * as 4096: now, all symlinks would appear as modified.
+	     *
+	     * So let's just special-case symlinks with a target path length
+	     * (i.e. `sd_size`) of 4096 and force them to be re-checked.
+	     */
+	    (!S_ISLNK(st->st_mode) || ce->ce_stat_data.sd_size != MAX_LONG_PATH) &&
+#endif
 	    (S_ISGITLINK(ce->ce_mode) || ce->ce_stat_data.sd_size != 0))
 		return changed;
 
@@ -1339,9 +1352,6 @@ static int add_index_entry_with_check(struct index_state *istate, struct cache_e
 	int skip_df_check = option & ADD_CACHE_SKIP_DFCHECK;
 	int new_only = option & ADD_CACHE_NEW_ONLY;
 
-	if (!(option & ADD_CACHE_KEEP_CACHE_TREE))
-		cache_tree_invalidate_path(istate, ce->name);
-
 	/*
 	 * If this entry's path sorts after the last entry in the index,
 	 * we can avoid searching for it.
@@ -1351,6 +1361,13 @@ static int add_index_entry_with_check(struct index_state *istate, struct cache_e
 		pos = index_pos_to_insert_pos(istate->cache_nr);
 	else
 		pos = index_name_stage_pos(istate, ce->name, ce_namelen(ce), ce_stage(ce), EXPAND_SPARSE);
+
+	/*
+	 * Cache tree path should be invalidated only after index_name_stage_pos,
+	 * in case it expands a sparse index.
+	 */
+	if (!(option & ADD_CACHE_KEEP_CACHE_TREE))
+		cache_tree_invalidate_path(istate, ce->name);
 
 	/* existing match? Just replace it. */
 	if (pos >= 0) {
@@ -1607,6 +1624,7 @@ int refresh_index(struct index_state *istate, unsigned int flags,
 	typechange_fmt = in_porcelain ? "T\t%s\n" : "%s: needs update\n";
 	added_fmt      = in_porcelain ? "A\t%s\n" : "%s: needs update\n";
 	unmerged_fmt   = in_porcelain ? "U\t%s\n" : "%s: needs merge\n";
+	enable_fscache(0);
 	/*
 	 * Use the multi-threaded preload_index() to refresh most of the
 	 * cache entries quickly then in the single threaded loop below,
@@ -1701,6 +1719,7 @@ int refresh_index(struct index_state *istate, unsigned int flags,
 	display_progress(progress, istate->cache_nr);
 	stop_progress(&progress);
 	trace_performance_leave("refresh index");
+	disable_fscache();
 	return has_errors;
 }
 
@@ -1817,7 +1836,10 @@ static int read_index_extension(struct index_state *istate,
 {
 	switch (CACHE_EXT(ext)) {
 	case CACHE_EXT_TREE:
+		trace2_region_enter("index", "read/extension/cache_tree", NULL);
 		istate->cache_tree = cache_tree_read(data, sz);
+		trace2_data_intmax("index", NULL, "read/extension/cache_tree/bytes", (intmax_t)sz);
+		trace2_region_leave("index", "read/extension/cache_tree", NULL);
 		break;
 	case CACHE_EXT_RESOLVE_UNDO:
 		istate->resolve_undo = resolve_undo_read(data, sz);
@@ -1838,7 +1860,7 @@ static int read_index_extension(struct index_state *istate,
 		break;
 	case CACHE_EXT_SPARSE_DIRECTORIES:
 		/* no content, only an indicator */
-		istate->sparse_index = 1;
+		istate->sparse_index = COLLAPSED;
 		break;
 	default:
 		if (*ext < 'A' || 'Z' < *ext)
@@ -2012,6 +2034,7 @@ static void post_read_index_from(struct index_state *istate)
 	tweak_untracked_cache(istate);
 	tweak_split_index(istate);
 	tweak_fsmonitor(istate);
+	apply_virtualfilesystem(istate);
 }
 
 static size_t estimate_cache_size_from_compressed(unsigned int entries)
@@ -2082,6 +2105,17 @@ static void *load_index_extensions(void *_data)
 	}
 
 	return NULL;
+}
+
+static void *load_index_extensions_threadproc(void *_data)
+{
+	void *result;
+
+	trace2_thread_start("load_index_extensions");
+	result = load_index_extensions(_data);
+	trace2_thread_exit();
+
+	return result;
 }
 
 /*
@@ -2160,12 +2194,17 @@ static void *load_cache_entries_thread(void *_data)
 	struct load_cache_entries_thread_data *p = _data;
 	int i;
 
+	trace2_thread_start("load_cache_entries");
+
 	/* iterate across all ieot blocks assigned to this thread */
 	for (i = p->ieot_start; i < p->ieot_start + p->ieot_blocks; i++) {
 		p->consumed += load_cache_entry_block(p->istate, p->ce_mem_pool,
 			p->offset, p->ieot->entries[i].nr, p->mmap, p->ieot->entries[i].offset, NULL);
 		p->offset += p->ieot->entries[i].nr;
 	}
+
+	trace2_thread_exit();
+
 	return NULL;
 }
 
@@ -2318,7 +2357,7 @@ int do_read_index(struct index_state *istate, const char *path, int must_exist)
 			int err;
 
 			p.src_offset = extension_offset;
-			err = pthread_create(&p.pthread, NULL, load_index_extensions, &p);
+			err = pthread_create(&p.pthread, NULL, load_index_extensions_threadproc, &p);
 			if (err)
 				die(_("unable to create load_index_extensions thread: %s"), strerror(err));
 
@@ -2372,7 +2411,8 @@ int do_read_index(struct index_state *istate, const char *path, int must_exist)
 	 * settings and other properties of the index (if necessary).
 	 */
 	prepare_repo_settings(istate->repo);
-	if (istate->repo->settings.command_requires_full_index)
+	if (!istate->repo->settings.sparse_index ||
+	    istate->repo->settings.command_requires_full_index)
 		ensure_full_index(istate);
 	else
 		ensure_correct_sparsity(istate);
@@ -2857,6 +2897,9 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
 
 	f = hashfd(tempfile->fd, tempfile->filename.buf);
 
+	if (gvfs_config_is_set(GVFS_SKIP_SHA_ON_INDEX))
+		f->skip_hash = 1;
+
 	for (i = removed = extended = 0; i < entries; i++) {
 		if (cache[i]->ce_flags & CE_REMOVE)
 			removed++;
@@ -3009,6 +3052,9 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
 	    !is_null_oid(&istate->split_index->base_oid)) {
 		struct strbuf sb = STRBUF_INIT;
 
+		if (istate->sparse_index)
+			die(_("cannot write split index for a sparse index"));
+
 		err = write_link_extension(&sb, istate) < 0 ||
 			write_index_ext_header(f, eoie_c, CACHE_EXT_LINK,
 					       sb.len) < 0;
@@ -3020,9 +3066,13 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
 	if (!strip_extensions && !drop_cache_tree && istate->cache_tree) {
 		struct strbuf sb = STRBUF_INIT;
 
+		trace2_region_enter("index", "write/extension/cache_tree", NULL);
 		cache_tree_write(&sb, istate->cache_tree);
 		err = write_index_ext_header(f, eoie_c, CACHE_EXT_TREE, sb.len) < 0;
 		hashwrite(f, sb.buf, sb.len);
+		trace2_data_intmax("index", NULL, "write/extension/cache_tree/bytes", (intmax_t)sb.len);
+		trace2_region_leave("index", "write/extension/cache_tree", NULL);
+
 		strbuf_release(&sb);
 		if (err)
 			return -1;
@@ -3121,7 +3171,7 @@ static int do_write_locked_index(struct index_state *istate, struct lock_file *l
 				 unsigned flags)
 {
 	int ret;
-	int was_full = !istate->sparse_index;
+	int was_full = istate->sparse_index == COMPLETELY_FULL;
 
 	ret = convert_to_sparse(istate, 0);
 

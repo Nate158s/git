@@ -5,6 +5,8 @@
  */
 #define USE_THE_INDEX_COMPATIBILITY_MACROS
 #include "cache.h"
+#include "gvfs.h"
+#include "bulk-checkin.h"
 #include "config.h"
 #include "lockfile.h"
 #include "quote.h"
@@ -408,6 +410,9 @@ static int add_cacheinfo(unsigned int mode, const struct object_id *oid,
 	if (!verify_path(path, mode))
 		return error("Invalid path '%s'", path);
 
+	if (S_ISSPARSEDIR(mode))
+		return error("%s: cannot add directory as cache entry", path);
+
 	len = strlen(path);
 	ce = make_empty_cache_entry(&the_index, len);
 
@@ -742,17 +747,23 @@ static int do_reupdate(int ac, const char **av,
 		 * commit.  Update everything in the index.
 		 */
 		has_head = 0;
+
  redo:
-	/* TODO: audit for interaction with sparse-index. */
-	ensure_full_index(&the_index);
 	for (pos = 0; pos < active_nr; pos++) {
 		const struct cache_entry *ce = active_cache[pos];
 		struct cache_entry *old = NULL;
 		int save_nr;
 		char *path;
 
-		if (ce_stage(ce) || !ce_path_match(&the_index, ce, &pathspec, NULL))
+		/*
+		 * We can safely skip re-updating sparse directories because if there
+		 * were any changes to re-update inside of the sparse directory, it
+		 * would not be sparse.
+		 */
+		if (S_ISSPARSEDIR(ce->ce_mode) || ce_stage(ce) ||
+		    !ce_path_match(&the_index, ce, &pathspec, NULL))
 			continue;
+
 		if (has_head)
 			old = read_one_ent(NULL, &head_oid,
 					   ce->name, ce_namelen(ce), 0);
@@ -1077,6 +1088,9 @@ int cmd_update_index(int argc, const char **argv, const char *prefix)
 
 	git_config(git_default_config, NULL);
 
+	prepare_repo_settings(r);
+	the_repository->settings.command_requires_full_index = 0;
+
 	/* we will diagnose later if it turns out that we need to update it */
 	newfd = hold_locked_index(&lock_file, 0);
 	if (newfd < 0)
@@ -1087,6 +1101,9 @@ int cmd_update_index(int argc, const char **argv, const char *prefix)
 		die("cache corrupted");
 
 	the_index.updated_skipworktree = 1;
+
+	/* we might be adding many objects to the object database */
+	plug_bulk_checkin();
 
 	/*
 	 * Custom copy of parse_options() because we want to handle
@@ -1133,7 +1150,13 @@ int cmd_update_index(int argc, const char **argv, const char *prefix)
 	argc = parse_options_end(&ctx);
 
 	getline_fn = nul_term_line ? strbuf_getline_nul : strbuf_getline_lf;
+	if (mark_skip_worktree_only && gvfs_config_is_set(GVFS_BLOCK_COMMANDS))
+		die(_("modifying the skip worktree bit is not supported on a GVFS repo"));
+
 	if (preferred_index_format) {
+		if (preferred_index_format != 4 && gvfs_config_is_set(GVFS_BLOCK_COMMANDS))
+			die(_("changing the index version is not supported on a GVFS repo"));
+
 		if (preferred_index_format < INDEX_FORMAT_LB ||
 		    INDEX_FORMAT_UB < preferred_index_format)
 			die("index-version %d not in range: %d..%d",
@@ -1168,7 +1191,12 @@ int cmd_update_index(int argc, const char **argv, const char *prefix)
 		strbuf_release(&buf);
 	}
 
+	/* by now we must have added all of the new objects */
+	unplug_bulk_checkin();
 	if (split_index > 0) {
+		if (gvfs_config_is_set(GVFS_BLOCK_COMMANDS))
+			die(_("split index is not supported on a GVFS repo"));
+
 		if (git_config_get_split_index() == 0)
 			warning(_("core.splitIndex is set to false; "
 				  "remove or change it, if you really want to "
@@ -1214,14 +1242,33 @@ int cmd_update_index(int argc, const char **argv, const char *prefix)
 	}
 
 	if (fsmonitor > 0) {
-		if (git_config_get_fsmonitor() == 0)
+		enum fsmonitor_mode fsm_mode = fsm_settings__get_mode(r);
+
+		if (fsm_mode == FSMONITOR_MODE_INCOMPATIBLE) {
+			struct strbuf buf_reason = STRBUF_INIT;
+			fsm_settings__get_reason(r, &buf_reason);
+			error("%s", buf_reason.buf);
+			strbuf_release(&buf_reason);
+			return -1;
+		}
+
+		if (fsm_mode == FSMONITOR_MODE_DISABLED) {
+			warning(_("core.useBuiltinFSMonitor is unset; "
+				"set it if you really want to enable the "
+				"builtin fsmonitor"));
 			warning(_("core.fsmonitor is unset; "
-				"set it if you really want to "
-				"enable fsmonitor"));
+				"set it if you really want to enable the "
+				"hook-based fsmonitor"));
+		}
 		add_fsmonitor(&the_index);
 		report(_("fsmonitor enabled"));
 	} else if (!fsmonitor) {
-		if (git_config_get_fsmonitor() == 1)
+		enum fsmonitor_mode fsm_mode = fsm_settings__get_mode(r);
+		if (fsm_mode == FSMONITOR_MODE_IPC)
+			warning(_("core.useBuiltinFSMonitor is set; "
+				"remove it if you really want to "
+				"disable fsmonitor"));
+		if (fsm_mode == FSMONITOR_MODE_HOOK)
 			warning(_("core.fsmonitor is set; "
 				"remove it if you really want to "
 				"disable fsmonitor"));

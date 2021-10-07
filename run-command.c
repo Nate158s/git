@@ -1307,18 +1307,29 @@ int async_with_fork(void)
 #endif
 }
 
-int run_hook_ve(const char *const *env, const char *name, va_list args)
+int run_hook_strvec(const char *const *env, const char *name,
+		    struct strvec *argv)
 {
 	struct child_process hook = CHILD_PROCESS_INIT;
 	const char *p;
 
 	p = find_hook(name);
+	/*
+	 * Backwards compatibility hack in VFS for Git: when originally
+	 * introduced (and used!), it was called `post-indexchanged`, but this
+	 * name was changed during the review on the Git mailing list.
+	 *
+	 * Therefore, when the `post-index-change` hook is not found, let's
+	 * look for a hook with the old name (which would be found in case of
+	 * already-existing checkouts).
+	 */
+	if (!p && !strcmp(name, "post-index-change"))
+		p = find_hook("post-indexchanged");
 	if (!p)
 		return 0;
 
 	strvec_push(&hook.args, p);
-	while ((p = va_arg(args, const char *)))
-		strvec_push(&hook.args, p);
+	strvec_pushv(&hook.args, argv->v);
 	if (env)
 		strvec_pushv(&hook.env_array, (const char **)env);
 	hook.no_stdin = 1;
@@ -1326,6 +1337,20 @@ int run_hook_ve(const char *const *env, const char *name, va_list args)
 	hook.trace2_hook_name = name;
 
 	return run_command(&hook);
+}
+
+int run_hook_ve(const char *const *env, const char *name, va_list args)
+{
+	struct strvec argv = STRVEC_INIT;
+	const char *p;
+	int ret;
+
+	while ((p = va_arg(args, const char *)))
+		strvec_push(&argv, p);
+
+	ret = run_hook_strvec(env, name, &argv);
+	strvec_clear(&argv);
+	return ret;
 }
 
 int run_hook_le(const char *const *env, const char *name, ...)

@@ -3,6 +3,7 @@
 /fuzz-pack-headers
 /fuzz-pack-idx
 /GIT-BUILD-OPTIONS
+/GIT-BUILT-FROM-COMMIT
 /GIT-CFLAGS
 /GIT-LDFLAGS
 /GIT-PREFIX
@@ -72,9 +73,11 @@
 /git-format-patch
 /git-fsck
 /git-fsck-objects
+/git-fsmonitor--daemon
 /git-gc
 /git-get-tar-commit-id
 /git-grep
+/git-gvfs-helper
 /git-hash-object
 /git-help
 /git-http-backend
@@ -170,6 +173,7 @@
 /git-unpack-file
 /git-unpack-objects
 /git-update-index
+/git-update-microsoft-git
 /git-update-ref
 /git-update-server-info
 /git-upload-archive
@@ -243,3 +247,4 @@ Release/
 /git.VC.db
 *.dSYM
 /contrib/buildsystems/out
+CMakeSettings.json

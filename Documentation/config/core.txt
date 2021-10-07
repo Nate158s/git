@@ -62,22 +62,58 @@ core.protectNTFS::
 	Defaults to `true` on Windows, and `false` elsewhere.
 
 core.fsmonitor::
-	If set, the value of this variable is used as a command which
-	will identify all files that may have changed since the
-	requested date/time. This information is used to speed up git by
-	avoiding unnecessary processing of files that have not changed.
-	See the "fsmonitor-watchman" section of linkgit:githooks[5].
+	If set, this variable contains the pathname of the "fsmonitor"
+	hook command.
++
+This hook command is used to identify all files that may have changed
+since the requested date/time. This information is used to speed up
+git by avoiding unnecessary scanning of files that have not changed.
++
+See the "fsmonitor-watchman" section of linkgit:githooks[5].
++
+Note: The value of this config setting is ignored if the (experimental)
+built-in file system monitor is enabled (see `core.useBuiltinFSMonitor`).
 
 core.fsmonitorHookVersion::
-	Sets the version of hook that is to be used when calling fsmonitor.
-	There are currently versions 1 and 2. When this is not set,
-	version 2 will be tried first and if it fails then version 1
-	will be tried. Version 1 uses a timestamp as input to determine
-	which files have changes since that time but some monitors
-	like watchman have race conditions when used with a timestamp.
-	Version 2 uses an opaque string so that the monitor can return
-	something that can be used to determine what files have changed
-	without race conditions.
+	Sets the protocol version to be used when invoking the
+	"fsmonitor" hook.
++
+There are currently versions 1 and 2. When this is not set,
+version 2 will be tried first and if it fails then version 1
+will be tried. Version 1 uses a timestamp as input to determine
+which files have changes since that time but some monitors
+like Watchman have race conditions when used with a timestamp.
+Version 2 uses an opaque string so that the monitor can return
+something that can be used to determine what files have changed
+without race conditions.
++
+Note: The value of this config setting is ignored if the
+built-in file system monitor is enabled (see `core.useBuiltinFSMonitor`).
+
+core.useBuiltinFSMonitor::
+	(EXPERIMENTAL) If set to true, enable the built-in file system monitor
+	daemon for this working directory (linkgit:git-fsmonitor--daemon[1]).
++
+Like hook-based file system monitors, the built-in file system monitor
+can speed up Git commands that need to refresh the Git index
+(e.g. `git status`) in a working directory with many files.  The
+built-in monitor eliminates the need to install and maintain an
+external third-party tool.
++
+The built-in file system monitor is currently available only on a
+limited set of supported platforms.  Currently, this includes Windows
+and MacOS.
++
+Note: if this config setting is set to `true`, the values of
+`core.fsmonitor` and `core.fsmonitorHookVersion` are ignored.
+
+core.virtualFilesystem::
+	If set, the value of this variable is used as a command which
+	will identify all files and directories that are present in
+	the working directory.  Git will only track and update files
+	listed in the virtual file system.  Using the virtual file system
+	will supersede the sparse-checkout settings which will be ignored.
+	See the "virtual file system" section of linkgit:githooks[5].
 
 core.trustctime::
 	If false, the ctime differences between the index and the
@@ -548,12 +584,29 @@ core.whitespace::
   errors. The default tab width is 8. Allowed values are 1 to 63.
 
 core.fsyncObjectFiles::
-	This boolean will enable 'fsync()' when writing object files.
+	A value indicating the level of effort Git will expend in
+	trying to make objects added to the repo durable in the event
+	of an unclean system shutdown. This setting currently only
+	controls loose objects in the object store, so updates to any
+	refs or the index may not be equally durable.
 +
-This is a total waste of time and effort on a filesystem that orders
-data writes properly, but can be useful for filesystems that do not use
-journalling (traditional UNIX filesystems) or that only journal metadata
-and not file contents (OS X's HFS+, or Linux ext3 with "data=writeback").
+* `false` allows data to remain in file system caches according to
+  operating system policy, whence it may be lost if the system loses power
+  or crashes.
+* `true` triggers a data integrity flush for each loose object added to the
+  object store. This is the safest setting that is likely to ensure durability
+  across all operating systems and file systems that honor the 'fsync' system
+  call. However, this setting comes with a significant performance cost on
+  common hardware. Git does not currently fsync parent directories for
+  newly-added files, so some filesystems may still allow data to be lost on
+  system crash.
+* `batch` enables an experimental mode that uses interfaces available in some
+  operating systems to write loose object data with a minimal set of FLUSH
+  CACHE (or equivalent) commands sent to the storage controller. If the
+  operating system interfaces are not available, this mode behaves the same as
+  `true`. This mode is expected to be as safe as `true` on macOS for repos
+  stored on HFS+ or APFS filesystems and on Windows for repos stored on NTFS or
+  ReFS.
 
 core.preloadIndex::
 	Enable parallel index preload for operations like 'git diff'
@@ -563,6 +616,19 @@ on filesystems like NFS that have weak caching semantics and thus
 relatively high IO latencies.  When enabled, Git will do the
 index comparison to the filesystem data in parallel, allowing
 overlapping IO's.  Defaults to true.
+
+core.fscache::
+	Enable additional caching of file system data for some operations.
++
+Git for Windows uses this to bulk-read and cache lstat data of entire
+directories (instead of doing lstat file by file).
+
+core.longpaths::
+	Enable long path (> 260) support for builtin commands in Git for
+	Windows. This is disabled by default, as long paths are not supported
+	by Windows Explorer, cmd.exe and the Git for Windows tool chain
+	(msys, bash, tcl, perl...). Only enable this if you know what you're
+	doing and are prepared to live with a few quirks.
 
 core.unsetenvvars::
 	Windows-only: comma-separated list of environment variables'
@@ -609,6 +675,55 @@ core.multiPackIndex::
 	single index. See linkgit:git-multi-pack-index[1] for more
 	information. Defaults to true.
 
+core.gvfs::
+	Enable the features needed for GVFS.  This value can be set to true
+	to indicate all features should be turned on or the bit values listed
+	below can be used to turn on specific features.
++
+--
+	GVFS_SKIP_SHA_ON_INDEX::
+		Bit value 1
+		Disables the calculation of the sha when writing the index
+	GVFS_MISSING_OK::
+		Bit value 4
+		Normally git write-tree ensures that the objects referenced by the
+		directory exist in the object database. This option disables this check.
+	GVFS_NO_DELETE_OUTSIDE_SPARSECHECKOUT::
+		Bit value 8
+		When marking entries to remove from the index and the working
+		directory this option will take into account what the
+		skip-worktree bit was set to so that if the entry has the
+		skip-worktree bit set it will not be removed from the working
+		directory.  This will allow virtualized working directories to
+		detect the change to HEAD and use the new commit tree to show
+		the files that are in the working directory.
+	GVFS_FETCH_SKIP_REACHABILITY_AND_UPLOADPACK::
+		Bit value 16
+		While performing a fetch with a virtual file system we know
+		that there will be missing objects and we don't want to download
+		them just because of the reachability of the commits.  We also
+		don't want to download a pack file with commits, trees, and blobs
+		since these will be downloaded on demand.  This flag will skip the
+		checks on the reachability of objects during a fetch as well as
+		the upload pack so that extraneous objects don't get downloaded.
+	GVFS_BLOCK_FILTERS_AND_EOL_CONVERSIONS::
+		Bit value 64
+		With a virtual file system we only know the file size before any
+		CRLF or smudge/clean filters processing is done on the client.
+		To prevent file corruption due to truncation or expansion with
+		garbage at the end, these filters must not run when the file
+		is first accessed and brought down to the client. Git.exe can't
+		currently tell the first access vs subsequent accesses so this
+		flag just blocks them from occurring at all.
+	GVFS_PREFETCH_DURING_FETCH::
+		Bit value 128
+		While performing a `git fetch` command, use the gvfs-helper to
+		perform a "prefetch" of commits and trees.
+--
+
+core.useGvfsHelper::
+	TODO
+
 core.sparseCheckout::
 	Enable "sparse checkout" feature. See linkgit:git-sparse-checkout[1]
 	for more information.
@@ -628,3 +743,12 @@ core.abbrev::
 	If set to "no", no abbreviation is made and the object names
 	are shown in their full length.
 	The minimum length is 4.
+
+core.configWriteLockTimeoutMS::
+	When processes try to write to the config concurrently, it is likely
+	that one process "wins" and the other process(es) fail to lock the
+	config file. By configuring a timeout larger than zero, Git can be
+	told to try to lock the config again a couple times within the
+	specified timeout. If the timeout is configure to zero (which is the
+	default), Git will fail immediately when the config is already
+	locked.

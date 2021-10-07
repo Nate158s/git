@@ -5,6 +5,9 @@ test_description='sparse checkout builtin tests'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
+GIT_TEST_SPLIT_INDEX=false
+export GIT_TEST_SPLIT_INDEX
+
 . ./test-lib.sh
 
 list_files() {
@@ -213,7 +216,7 @@ test_expect_success 'cone mode: match patterns' '
 test_expect_success 'cone mode: warn on bad pattern' '
 	test_when_finished mv sparse-checkout repo/.git/info/ &&
 	cp repo/.git/info/sparse-checkout . &&
-	echo "!/deep/deeper/*" >>repo/.git/info/sparse-checkout &&
+	echo "!/deep/deeper/*" >repo/.git/info/sparse-checkout &&
 	git -C repo read-tree -mu HEAD 2>err &&
 	test_i18ngrep "unrecognized negative pattern" err
 '
@@ -228,36 +231,31 @@ test_expect_success 'sparse-checkout disable' '
 '
 
 test_expect_success 'sparse-index enabled and disabled' '
-	(
-		sane_unset GIT_TEST_SPLIT_INDEX &&
-		git -C repo update-index --no-split-index &&
+	git -C repo sparse-checkout init --cone --sparse-index &&
+	test_cmp_config -C repo true index.sparse &&
+	git -C repo ls-files --sparse >sparse &&
+	git -C repo sparse-checkout disable &&
+	git -C repo ls-files --sparse >full &&
 
-		git -C repo sparse-checkout init --cone --sparse-index &&
-		test_cmp_config -C repo true index.sparse &&
-		git -C repo ls-files --sparse >sparse &&
-		git -C repo sparse-checkout disable &&
-		git -C repo ls-files --sparse >full &&
+	cat >expect <<-\EOF &&
+	@@ -1,4 +1,7 @@
+	 a
+	-deep/
+	-folder1/
+	-folder2/
+	+deep/a
+	+deep/deeper1/a
+	+deep/deeper1/deepest/a
+	+deep/deeper2/a
+	+folder1/a
+	+folder2/a
+	EOF
 
-		cat >expect <<-\EOF &&
-		@@ -1,4 +1,7 @@
-		 a
-		-deep/
-		-folder1/
-		-folder2/
-		+deep/a
-		+deep/deeper1/a
-		+deep/deeper1/deepest/a
-		+deep/deeper2/a
-		+folder1/a
-		+folder2/a
-		EOF
+	diff -u sparse full | tail -n +3 >actual &&
+	test_cmp expect actual &&
 
-		diff -u sparse full | tail -n +3 >actual &&
-		test_cmp expect actual &&
-
-		git -C repo config --list >config &&
-		! grep index.sparse config
-	)
+	git -C repo config --list >config &&
+	test_cmp_config -C repo false index.sparse
 '
 
 test_expect_success 'cone mode: init and set' '
@@ -610,7 +608,7 @@ test_expect_success 'pattern-checks: starting "*"' '
 	cat >repo/.git/info/sparse-checkout <<-\EOF &&
 	/*
 	!/*/
-	*eep/
+	/*eep/
 	EOF
 	check_read_tree_errors repo "a deep" "disabling cone pattern matching"
 '
@@ -621,10 +619,19 @@ test_expect_success 'pattern-checks: contained glob characters' '
 		cat >repo/.git/info/sparse-checkout <<-EOF &&
 		/*
 		!/*/
-		something$c-else/
+		/something$c-else/
 		EOF
 		check_read_tree_errors repo "a" "disabling cone pattern matching" || return 1
 	done
+'
+
+test_expect_success 'pattern-checks: starting "/"' '
+	cat >repo/.git/info/sparse-checkout <<-\EOF &&
+	/*
+	!/*/
+	deep/
+	EOF
+	check_read_tree_errors repo "a deep" "disabling cone pattern matching"
 '
 
 test_expect_success BSLASHPSPEC 'pattern-checks: escaped characters' '
@@ -710,6 +717,10 @@ test_expect_success 'cone mode clears ignored subdirectories' '
 	git -C repo status --porcelain=v2 >out &&
 	test_must_be_empty out &&
 
+	git -C repo -c index.deleteSparseDirectories=false sparse-checkout reapply &&
+	test_path_is_dir repo/folder1 &&
+	test_path_is_dir repo/deep/deeper2 &&
+
 	git -C repo sparse-checkout reapply &&
 	test_path_is_missing repo/folder1 &&
 	test_path_is_missing repo/deep/deeper2 &&
@@ -764,6 +775,45 @@ test_expect_success 'malformed cone-mode patterns' '
 	test_cmp repo/.git/info/sparse-checkout actual &&
 	grep "warning: your sparse-checkout file may have issues: pattern .* is repeated" err &&
 	grep "warning: disabling cone pattern matching" err
+'
+
+test_expect_success 'init with cone mode verifies existing cone patterns' '
+	# Set non-cone mode pattern
+	echo "/deep/deeper*" >repo/.git/info/sparse-checkout &&
+
+	git -C repo sparse-checkout init --cone 2>err &&
+	test_i18ngrep "disabling cone mode" err &&
+	test_must_fail git -C repo config core.sparsecheckoutcone
+'
+
+# NEEDSWORK: in the case of directory patterns like `deep/`, it might be worth trying
+# to "correct" the patterns to match a cone mode style. However, that may be more difficult
+# for nested directories (like `deep/deeper1/`) in which multiple individual patterns
+# would be mapped from the original (`/deep/`, `!/deep/*/`, `/deep/deeper1/`).
+test_expect_success 'add cone pattern disallowed with existing non-cone directory pattern' '
+	rm -f repo/.git/info/sparse-checkout &&
+
+	git -C repo sparse-checkout init --cone &&
+
+	# Manually set the sparse checkout pattern to a directory pattern
+	# without preceding slash
+	cat >repo/.git/info/sparse-checkout <<-\EOF &&
+	deep/
+	EOF
+
+	# `add` fails because `deep/` is not a valid cone pattern.
+	test_must_fail git -C repo sparse-checkout add folder1/ 2>err &&
+	test_i18ngrep "existing sparse-checkout patterns do not use cone mode" err &&
+
+	# `set` succeeds with same patterns set properly for cone mode.
+	git -C repo sparse-checkout set deep/ folder1/ &&
+	cat >expect <<-\EOF &&
+	/*
+	!/*/
+	/deep/
+	/folder1/
+	EOF
+	test_cmp expect repo/.git/info/sparse-checkout
 '
 
 test_done

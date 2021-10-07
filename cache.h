@@ -241,7 +241,7 @@ static inline unsigned create_ce_flags(unsigned stage)
 #define ce_namelen(ce) ((ce)->ce_namelen)
 #define ce_size(ce) cache_entry_size(ce_namelen(ce))
 #define ce_stage(ce) ((CE_STAGEMASK & (ce)->ce_flags) >> CE_STAGESHIFT)
-#define ce_uptodate(ce) ((ce)->ce_flags & CE_UPTODATE)
+#define ce_uptodate(ce) (((ce)->ce_flags & CE_UPTODATE) || ((ce)->ce_flags & CE_FSMONITOR_VALID))
 #define ce_skip_worktree(ce) ((ce)->ce_flags & CE_SKIP_WORKTREE)
 #define ce_mark_uptodate(ce) ((ce)->ce_flags |= CE_UPTODATE)
 #define ce_intent_to_add(ce) ((ce)->ce_flags & CE_INTENT_TO_ADD)
@@ -311,6 +311,28 @@ struct untracked_cache;
 struct progress;
 struct pattern_list;
 
+enum sparse_index_mode {
+	/*
+	 * COMPLETELY_FULL: there are no sparse directories
+	 * in the index at all.
+	 */
+	COMPLETELY_FULL = 0,
+
+	/*
+	 * COLLAPSED: the index has already been collapsed to sparse
+	 * directories whereever possible.
+	 */
+	COLLAPSED = 1,
+
+	/*
+	 * PARTIALLY_SPARSE: the sparse directories that exist are
+	 * outside the sparse-checkout boundary, but it is possible
+	 * that some file entries could collapse to sparse directory
+	 * entries.
+	 */
+	PARTIALLY_SPARSE = 2,
+};
+
 struct index_state {
 	struct cache_entry **cache;
 	unsigned int version;
@@ -324,14 +346,8 @@ struct index_state {
 		 drop_cache_tree : 1,
 		 updated_workdir : 1,
 		 updated_skipworktree : 1,
-		 fsmonitor_has_run_once : 1,
-
-		 /*
-		  * sparse_index == 1 when sparse-directory
-		  * entries exist. Requires sparse-checkout
-		  * in cone mode.
-		  */
-		 sparse_index : 1;
+		 fsmonitor_has_run_once : 1;
+	enum sparse_index_mode sparse_index;
 	struct hashmap name_hash;
 	struct hashmap dir_hash;
 	struct object_id oid;
@@ -794,6 +810,7 @@ int strcmp_offset(const char *s1, const char *s2, size_t *first_change);
 int index_dir_exists(struct index_state *istate, const char *name, int namelen);
 void adjust_dirname_case(struct index_state *istate, char *name);
 struct cache_entry *index_file_exists(struct index_state *istate, const char *name, int namelen, int igncase);
+struct cache_entry *index_file_next_match(struct index_state *istate, struct cache_entry *ce, int igncase);
 
 /*
  * Searches for an entry defined by name and namelen in the given index.
@@ -993,13 +1010,23 @@ void reset_shared_repository(void);
 extern int read_replace_refs;
 extern char *git_replace_ref_base;
 
-extern int fsync_object_files;
+enum fsync_object_files_mode {
+    FSYNC_OBJECT_FILES_OFF,
+    FSYNC_OBJECT_FILES_ON,
+    FSYNC_OBJECT_FILES_BATCH
+};
+
+extern enum fsync_object_files_mode fsync_object_files;
 extern int use_fsync;
 extern int core_preload_index;
+extern const char *core_virtualfilesystem;
+extern int core_gvfs;
 extern int precomposed_unicode;
 extern int protect_hfs;
 extern int protect_ntfs;
-extern const char *core_fsmonitor;
+extern int core_use_gvfs_helper;
+extern const char *gvfs_cache_server_url;
+extern struct strbuf gvfs_shared_cache_pathname;
 
 extern int core_apply_sparse_checkout;
 extern int core_sparse_checkout_cone;
@@ -1015,6 +1042,8 @@ int use_optional_locks(void);
  */
 extern char comment_line_char;
 extern int auto_comment_line_char;
+
+extern int core_virtualize_objects;
 
 enum log_refs_config {
 	LOG_REFS_UNSET = -1,
@@ -1235,6 +1264,7 @@ int normalize_path_copy_len(char *dst, const char *src, int *prefix_len);
 int normalize_path_copy(char *dst, const char *src);
 int longest_ancestor_length(const char *path, struct string_list *prefixes);
 char *strip_path_suffix(const char *path, const char *suffix);
+int is_mount_point_via_stat(struct strbuf *path);
 int daemon_avoid_alias(const char *path);
 
 /*
